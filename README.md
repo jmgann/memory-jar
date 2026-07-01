@@ -1,48 +1,19 @@
-# Memory Jar PWA V7
+# Memory Jar PWA — V8.1
 
-This package turns the V5 prototype into a basic Progressive Web App.
+V8.1 focuses on frictionless capture.
 
-## Files
+## What's new
 
-- `index.html` — the app
-- `manifest.json` — app name, icon, theme, install settings
-- `service-worker.js` — offline caching
-- `icons/` — app icons
+- Home screen now starts with one simple capture question.
+- Removed the rotating prompt section from the home screen.
+- Added one-tap suggestion chips for frequent people and places.
+- Selected suggestion chips disappear until removed from the current memory.
+- Date chips are clickable and insert Today / Yesterday / 2 days ago with exact dates.
 
-## Important
+## Testing
 
-A PWA install prompt will not work from a plain `file://` open. You need to host it over HTTPS or run it locally with a small web server.
-
-## Fast local test
-
-From this folder, run:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000
-```
-
-## Phone test
-
-Easiest path:
-
-1. Upload this folder to Netlify, Vercel, or GitHub Pages.
-2. Open the hosted URL on your phone.
-3. On iPhone Safari: Share → Add to Home Screen.
-4. On Android Chrome: menu → Install app / Add to Home screen.
-
-## Storage reminder
-
-Memories are still stored locally in the browser/device localStorage. Installing the PWA does not create cloud sync.
-
-
-## V7 changes
-- Softer ritual-focused copy.
-- Save action renamed to “Drop it in.”
-- Added gentle confirmation after saving.
-- Empty states and prompts now feel less like journaling/productivity.
+1. Upload all files to GitHub Pages.
+2. Open the live URL on your phone.
+3. Add a few memories using the same people/places.
+4. Open Capture a Moment again and confirm those suggestions appear.
+5. Tap a suggestion and confirm it disappears until removed.

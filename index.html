@@ -226,22 +226,30 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 }
 
 
-/* Prompt Card */
-.prompt-card{
+/* Capture Hero */
+.capture-hero {
+  padding: 22px 20px 4px;
+}
+.capture-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px 18px 16px; box-shadow: var(--shadow);
+  border-radius: var(--radius); padding: 22px 20px; box-shadow: var(--shadow);
+  text-align: center;
 }
-.prompt-text{
-  font-family: var(--ff-head); font-size: 1.05rem; color: var(--text);
-  letter-spacing: -.2px; line-height: 1.35;
+.capture-question {
+  font-family: var(--ff-head); font-size: 1.28rem; line-height: 1.3;
+  letter-spacing: -.2px; margin-bottom: 14px; color: var(--text);
 }
-.prompt-meta{
-  margin-top: 8px; font-size: .78rem; color: var(--muted);
+.capture-card .btn { min-width: 150px; }
+.suggestion-row {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px;
 }
-.prompt-actions{
-  margin-top: 10px; display:flex; gap:10px; justify-content:flex-end; padding: 0 0;
+.suggestion-row:empty { display: none; }
+.suggestion-pill {
+  border: 1.5px solid var(--border); background: var(--surface); border-radius: 20px;
+  padding: 4px 10px; font-family: var(--ff-body); font-size: .78rem;
+  color: var(--text); cursor: pointer; transition: background .12s, border-color .12s, transform .1s;
 }
-.prompt-actions .btn { flex: 0 0 auto; }
+.suggestion-pill:hover { background: var(--accent-l); border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 
 /* Memory List */
 .memory-list { display: flex; flex-direction: column; }
@@ -577,16 +585,11 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
   </div>
 
 
-  <!-- Prompt -->
-  <div class="section" id="prompt-section">
-    <div class="section-label">Today's nudge</div>
-    <div class="prompt-card" id="prompt-card">
-      <div class="prompt-text" id="prompt-text"></div>
-      <div class="prompt-meta" id="prompt-meta"></div>
-    </div>
-    <div class="prompt-actions">
-      <button class="btn btn-ghost btn-sm" onclick="shufflePrompt()">New prompt ↺</button>
-      <button class="btn btn-primary btn-sm" onclick="usePrompt()">Use as a nudge</button>
+  <!-- Capture Hero -->
+  <div class="capture-hero" id="capture-hero">
+    <div class="capture-card">
+      <div class="capture-question">What’s one small moment you’d like to hold onto today?</div>
+      <button class="btn btn-primary" onclick="openAddModal()">Capture a Moment</button>
     </div>
   </div>
 
@@ -625,7 +628,7 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 </div>
 
 <!-- FAB -->
-<button class="fab hidden" id="fab" title="Add to Jar" onclick="openAddModal()">+</button>
+<button class="fab hidden" id="fab" title="Capture a Moment" onclick="openAddModal()">+</button>
 
 <!-- ════════════════════════════════════════════════════
      TAG PAGE
@@ -682,6 +685,7 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
               onkeydown="chipKeydown(event,'who')" oninput="chipPaste(event,'who')" />
           </div>
           <div class="blank-hint">Press Enter or ; between multiple entries</div>
+          <div class="suggestion-row" id="suggestions-who"></div>
         </div>
       </div>
       <div class="blank-row">
@@ -703,6 +707,7 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
               onkeydown="chipKeydown(event,'where')" oninput="chipPaste(event,'where')" />
           </div>
           <div class="blank-hint">Press Enter or ; between multiple entries</div>
+          <div class="suggestion-row" id="suggestions-where"></div>
         </div>
       </div>
       <div class="blank-row">
@@ -732,7 +737,7 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 <div class="modal-backdrop hidden" id="settings-modal" onclick="handleBackdropClick(event,'settings-modal')">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Settings</h2>
-    <p style="color:var(--muted);font-size:.88rem;margin-bottom:16px;">Change your passcode, prompt settings, or reset the app entirely.</p>
+    <p style="color:var(--muted);font-size:.88rem;margin-bottom:16px;">Change your passcode or reset the app entirely.</p>
     <div style="display:flex;flex-direction:column;gap:14px;">
       <div>
         <label style="display:block;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Current passcode</label>
@@ -745,16 +750,6 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
       <div>
         <label style="display:block;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Confirm new passcode</label>
         <input type="password" id="s-confirm" maxlength="12" placeholder="••••" class="blank-textarea" style="resize:none;" />
-      </div>
-
-      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-        <input type="checkbox" id="s-reflective" style="width:16px;height:16px;accent-color:var(--accent);" />
-        <label for="s-reflective" style="font-size:.86rem;color:var(--text);cursor:pointer;">
-          Include occasional reflective prompts (optional)
-        </label>
-      </div>
-      <div style="font-size:.74rem;color:var(--muted);margin-top:-6px;">
-        Off by default. When on, you may see prompts that feel a bit deeper — still gentle.
       </div>
 
       <div class="error-msg" id="settings-error"></div>
@@ -818,7 +813,7 @@ function recentDateOptions(){
     const d=new Date(); d.setDate(d.getDate()-i);
     const tzOffset=d.getTimezoneOffset()*60000;
     const iso=new Date(d.getTime()-tzOffset).toISOString().slice(0,10);
-    out.push({iso,label:i===0?'Today':i===1?'Yesterday':displayDate(iso)});
+    out.push({iso,label:i===0?'Today':i===1?'Yesterday':'2 days ago', exact:displayDate(iso)});
   }
   return out;
 }
@@ -1051,8 +1046,6 @@ function hideAllPages() {
 function showSettings() {
   $('s-current').value = $('s-new').value = $('s-confirm').value = '';
   $('settings-error').textContent = $('settings-ok').textContent = '';
-  const s = loadSettings();
-  $('s-reflective').checked = !!s.reflectivePrompts;
   $('settings-modal').classList.remove('hidden');
 }
 function changePasscode() {
@@ -1061,10 +1054,6 @@ function changePasscode() {
   if (nw.length < 4) return showErr('settings-error','New passcode must be at least 4 chars.');
   if (nw !== cf)     return showErr('settings-error','New passcodes do not match.');
   const users = loadUsers(); users[currentUser].passcode = nw; saveUsers(users);
-  // Save prompt preference
-  const s = loadSettings();
-  s.reflectivePrompts = !!$('s-reflective').checked;
-  saveSettings(s);
   $('settings-error').textContent = '';
   $('settings-ok').textContent = '✓ Passcode updated!';
   $('s-current').value = $('s-new').value = $('s-confirm').value = '';
@@ -1082,6 +1071,7 @@ function renderChips(field) {
     chip.innerHTML = `${esc(tag)}<button class="chip-remove" onclick="removeChip('${field}',${i})">×</button>`;
     box.insertBefore(chip, input);
   });
+  renderSuggestionChips(field);
 }
 function addChip(field, value) {
   const v = value.trim().replace(/;+$/,'').trim();
@@ -1113,12 +1103,48 @@ function clearChips() {
   ['who','when','where'].forEach(f => { chipTags[f]=[]; renderChips(f); $('chip-input-'+f).value=''; });
 }
 
+/* ═══ ONE-TAP SUGGESTIONS ═══════════════════════════ */
+function frequentTags(field, limit=5){
+  const counts = {};
+  loadMemories().forEach(m => {
+    fieldArr(m[field]).forEach(tag => {
+      const clean = String(tag).trim();
+      if(!clean || chipTags[field].includes(clean)) return;
+      counts[clean] = (counts[clean] || 0) + 1;
+    });
+  });
+  return Object.entries(counts)
+    .sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag,count]) => ({tag,count}));
+}
+function renderSuggestionChips(field){
+  if(field !== 'who' && field !== 'where') return;
+  const row = $('suggestions-' + field);
+  if(!row) return;
+  const suggestions = frequentTags(field, 5);
+  row.innerHTML = '';
+  suggestions.forEach(s => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'suggestion-pill';
+    btn.textContent = s.tag;
+    btn.onclick = () => addSuggestionChip(field, s.tag);
+    row.appendChild(btn);
+  });
+}
+function addSuggestionChip(field, tag){
+  addChip(field, tag);
+  $('chip-input-' + field).value = '';
+  renderSuggestionChips(field);
+}
+
 /* ═══ QUICK DATE CHIPS ═════════════════════════════ */
 function renderQuickDates(){
   const row = $('quick-date-row');
   if(!row) return;
   row.innerHTML = recentDateOptions().map(d =>
-    `<button type="button" class="quick-date-pill" onclick="selectQuickDate('${d.iso}')">${d.label}</button>`
+    `<button type="button" class="quick-date-pill" title="${d.exact}" onclick="selectQuickDate('${d.iso}')">${d.label} · ${d.exact}</button>`
   ).join('');
 }
 function selectQuickDate(iso){
@@ -1128,21 +1154,13 @@ function selectQuickDate(iso){
 }
 
 /* ═══ ADD / SAVE MEMORY ══════════════════════════════ */
-function openAddModal(fromPrompt=false) {
+function openAddModal() {
   $('f-what').value=''; $('f-why').value=''; $('f-title').value='';
   clearChips(); addChip('when', todayISO()); renderQuickDates(); $('add-error').textContent='';
-  // Soft prompt guidance (optional)
-  const p = pickPromptForToday(false);
-  const line = $('add-prompt-line');
-  if (fromPrompt && p && p.text) {
-    line.innerHTML = `Prompt (optional): <span style="color:var(--text);">${esc(p.text)}</span>`;
-    $('f-what').setAttribute('placeholder', `Optional prompt: ${p.text}
-
-What moment do you want to keep?`);
-  } else {
-    line.textContent = '';
-    $('f-what').setAttribute('placeholder', 'What moment do you want to keep?');
-  }
+  $('add-prompt-line').textContent = '';
+  $('f-what').setAttribute('placeholder', 'What moment do you want to keep?');
+  renderSuggestionChips('who');
+  renderSuggestionChips('where');
 
   $('add-modal').classList.remove('hidden');
   setTimeout(() => $('f-what').focus(), 150);
@@ -1681,7 +1699,6 @@ function toggleTlDetail(id) {
 /* ═══ FULL RENDER ════════════════════════════════════ */
 function renderAll() {
   const memories=loadMemories();
-  renderPrompt();
   showRandom(memories);
   renderList();
   buildTagCloud();
@@ -1689,13 +1706,6 @@ function renderAll() {
 
 /* ═══ MODAL HELPERS ══════════════════════════════════ */
 function closeModal(id) {
-  // Persist lightweight settings on close
-  if (id === 'settings-modal') {
-    const s = loadSettings();
-    s.reflectivePrompts = !!$('s-reflective').checked;
-    saveSettings(s);
-    renderPrompt();
-  }
   $(id).classList.add('hidden');
 }
 function handleBackdropClick(e,id) { if(e.target===$(id)) closeModal(id); }
