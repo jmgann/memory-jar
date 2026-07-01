@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  MEMORY JAR  —  Single-file Web App                         ║
+  ║  Usage:                                                      ║
+  ║  1. Open this file in any modern browser.                    ║
+  ║  2. Create a username + passcode (4–12 chars) on first visit.           ║
+  ║  3. Add memories using the "+" button.                       ║
+  ║  4. Browse, search, export, or delete your memories.         ║
+  ║  5. Visualize via the "Visualize ▾" dropdown:                ║
+  ║       • Map  — bubble map of Where tags (geo-coded)          ║
+  ║       • Timeline — year/month/day view of When tags          ║
+  ║  6. Browse by tag via the Tag Cloud below the toolbar.       ║
+  ║  7. Use "Reset App" to wipe all data.                        ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#faf7f2" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Memory Jar" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<title>Memory Jar</title>
+<style>
+/* ── Google Fonts ─────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── Design Tokens ────────────────────────────────────── */
+:root {
+  --bg:       #faf7f2;
+  --surface:  #ffffff;
+  --border:   #e8e0d4;
+  --text:     #2a2218;
+  --muted:    #8c7f70;
+  --accent:   #c4703a;
+  --accent-l: #f5e8dc;
+  --danger:   #b94040;
+  --radius:   12px;
+  --shadow:   0 2px 16px rgba(42,34,24,.07);
+  --ff-head:  'Playfair Display', Georgia, serif;
+  --ff-body:  'DM Sans', system-ui, sans-serif;
+}
+
+/* ── Reset ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: var(--ff-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+
+/* ── PWA / Mobile Polish ───────────────────────────── */
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.app-header, .tag-page-header, .viz-header { padding-top: calc(18px + env(safe-area-inset-top)); }
+.fab { bottom: calc(24px + env(safe-area-inset-bottom)); }
+.pwa-install-card {
+  margin: 14px 20px 0; padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+  display: none; align-items: center; justify-content: space-between; gap: 12px;
+}
+.pwa-install-card.show { display: flex; }
+.pwa-install-copy { font-size: .82rem; color: var(--muted); line-height: 1.35; }
+@media (display-mode: standalone) { .pwa-install-card { display: none !important; } }
+
+/* ── Utility ─────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+/* ── Screens ──────────────────────────────────────────── */
+.screen {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 100vh; padding: 24px 16px;
+}
+
+/* ── Lock Screen ──────────────────────────────────────── */
+#lock-screen { text-align: center; gap: 0; }
+.jar-icon {
+  font-size: 64px; line-height: 1; margin-bottom: 16px;
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+#lock-screen h1 { font-family: var(--ff-head); font-size: 2.2rem; letter-spacing: -.5px; margin-bottom: 6px; }
+#lock-screen p { color: var(--muted); font-size: .9rem; margin-bottom: 32px; }
+.lock-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 28px 24px; width: 100%;
+  max-width: 360px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.lock-card label {
+  font-size: .8rem; font-weight: 500; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px;
+}
+.lock-card input[type="password"],
+.lock-card input[type="text"] {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: var(--ff-body); font-size: 1rem;
+  background: var(--bg); color: var(--text); transition: border-color .15s; outline: none;
+}
+.lock-card input:focus { border-color: var(--accent); }
+.error-msg { color: var(--danger); font-size: .82rem; min-height: 18px; }
+
+/* ── Buttons ──────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+  font-family: var(--ff-body); font-size: .9rem; font-weight: 500;
+  transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: .88; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--border); }
+.btn-ghost:hover { background: var(--border); color: var(--text); }
+.btn-danger { background: #fdf0f0; color: var(--danger); border: 1.5px solid #f0cccc; }
+.btn-danger:hover { background: #fad9d9; }
+.btn-sm { padding: 6px 12px; font-size: .82rem; }
+.btn-icon {
+  width: 36px; height: 36px; padding: 0; border-radius: 50%;
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+.btn-icon:hover { background: var(--accent-l); color: var(--accent); }
+.reset-link {
+  margin-top: 18px; background: none; border: none; color: var(--muted);
+  font-size: .8rem; cursor: pointer; text-decoration: underline; font-family: var(--ff-body);
+}
+.reset-link:hover { color: var(--danger); }
+
+/* ── Main App Screen ──────────────────────────────────── */
+#app-screen {
+  display: none; flex-direction: column; min-height: 100vh;
+  max-width: 640px; margin: 0 auto; width: 100%; padding: 0 0 80px;
+}
+
+/* Header */
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg); z-index: 20;
+}
+.app-header h1 { font-family: var(--ff-head); font-size: 1.5rem; letter-spacing: -.3px; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ── Visualize Dropdown ───────────────────────────────── */
+.viz-dropdown-wrap { position: relative; }
+.viz-btn {
+  padding: 7px 13px; font-size: .82rem; font-weight: 500;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 8px; cursor: pointer; font-family: var(--ff-body);
+  color: var(--text); display: inline-flex; align-items: center; gap: 5px;
+  transition: background .12s, border-color .12s;
+}
+.viz-btn:hover { background: var(--accent-l); border-color: var(--accent); color: var(--accent); }
+.viz-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  min-width: 170px; z-index: 30; overflow: hidden;
+  animation: dropIn .12s ease;
+}
+@keyframes dropIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.viz-dropdown button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 16px; background: none; border: none;
+  font-family: var(--ff-body); font-size: .88rem; color: var(--text);
+  cursor: pointer; text-align: left; transition: background .1s;
+}
+.viz-dropdown button:hover { background: var(--accent-l); color: var(--accent); }
+.viz-dropdown button + button { border-top: 1px solid var(--border); }
+
+/* Search */
+.search-wrap { padding: 14px 20px 0; }
+.search-wrap input {
+  width: 100%; padding: 9px 14px 9px 36px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: var(--ff-body); font-size: .9rem;
+  background: var(--surface); color: var(--text); outline: none; transition: border-color .15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c7f70' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 12px center;
+}
+.search-wrap input:focus { border-color: var(--accent); }
+
+/* Sections */
+.section { padding: 20px 20px 0; }
+.section-label {
+  font-size: .72rem; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+}
+
+/* Random Card */
+.random-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+  position: relative; overflow: hidden;
+}
+.random-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), #e8a87c);
+}
+.random-card .memory-title {
+  font-family: var(--ff-head); font-size: 1.15rem; font-style: italic;
+  margin-bottom: 10px; color: var(--accent);
+}
+.random-card .memory-fields { display: flex; flex-direction: column; gap: 5px; }
+.memory-field { font-size: .88rem; color: var(--muted); }
+.memory-field strong { color: var(--text); font-weight: 500; }
+.random-card .card-footer {
+  margin-top: 14px; display: flex; justify-content: space-between; align-items: center;
+}
+.memory-ts { font-size: .75rem; color: var(--muted); }
+.empty-state {
+  text-align: center; padding: 28px 0; color: var(--muted);
+  font-size: .9rem; font-style: italic;
+}
+
+
+/* Prompt Card */
+.prompt-card{
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 18px 16px; box-shadow: var(--shadow);
+}
+.prompt-text{
+  font-family: var(--ff-head); font-size: 1.05rem; color: var(--text);
+  letter-spacing: -.2px; line-height: 1.35;
+}
+.prompt-meta{
+  margin-top: 8px; font-size: .78rem; color: var(--muted);
+}
+.prompt-actions{
+  margin-top: 10px; display:flex; gap:10px; justify-content:flex-end; padding: 0 0;
+}
+.prompt-actions .btn { flex: 0 0 auto; }
+
+/* Memory List */
+.memory-list { display: flex; flex-direction: column; }
+.memory-item { border-bottom: 1px solid var(--border); }
+.memory-item:first-child { border-top: 1px solid var(--border); }
+.memory-summary {
+  display: flex; align-items: center; gap: 12px; padding: 13px 20px;
+  cursor: pointer; background: none; border: none; width: 100%;
+  text-align: left; font-family: var(--ff-body); transition: background .12s;
+}
+.memory-summary:hover { background: rgba(196,112,58,.04); }
+.memory-summary-text { flex: 1; min-width: 0; }
+.memory-summary-what {
+  font-size: .92rem; font-weight: 500; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: var(--text);
+}
+.memory-summary-meta { font-size: .75rem; color: var(--muted); margin-top: 1px; }
+.chevron { color: var(--muted); font-size: .75rem; transition: transform .2s; flex-shrink: 0; }
+.memory-item.open .chevron { transform: rotate(180deg); }
+.memory-detail {
+  padding: 0 20px 16px; display: none; flex-direction: column;
+  gap: 6px; animation: fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+.memory-item.open .memory-detail { display: flex; }
+.memory-detail .memory-field { font-size: .88rem; }
+.detail-actions { margin-top: 10px; display: flex; gap: 8px; }
+
+/* Toolbar */
+.toolbar { padding: 16px 20px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Tag Cloud ────────────────────────────────────────── */
+.tag-cloud-section { padding: 20px 20px 0; }
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.tag-cloud-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 20px; padding: 4px 12px; font-family: var(--ff-body);
+  cursor: pointer; transition: background .12s, border-color .12s, transform .1s;
+  white-space: nowrap;
+}
+.tag-cloud-pill:hover { background: var(--accent-l); border-color: var(--accent); transform: scale(1.04); }
+.pill-label { color: var(--text); }
+.pill-count {
+  font-size: .72rem; color: var(--muted); font-weight: 500;
+  background: var(--border); border-radius: 20px; padding: 0 6px; line-height: 1.6;
+}
+
+/* Chip display */
+.chip-display { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.chip-tag {
+  background: var(--accent-l); color: var(--accent); border-radius: 20px;
+  padding: 1px 9px; font-size: .78rem; font-weight: 500; white-space: nowrap;
+}
+
+/* ── Tag Page ─────────────────────────────────────────── */
+#tag-page {
+  display: none; flex-direction: column; min-height: 100vh;
+  max-width: 640px; margin: 0 auto; width: 100%; padding: 0 0 80px;
+}
+.tag-page-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg); z-index: 20;
+}
+.tag-page-title {
+  font-family: var(--ff-head); font-size: 1.3rem;
+  flex: 1; display: flex; align-items: center; gap: 8px;
+}
+.tag-page-badge {
+  background: var(--accent-l); color: var(--accent); border-radius: 20px;
+  padding: 2px 10px; font-size: .8rem; font-style: normal;
+  font-family: var(--ff-body); font-weight: 500;
+}
+
+/* ── Viz Page ─────────────────────────────────────────── */
+#viz-page {
+  display: none; flex-direction: column; min-height: 100vh;
+  width: 100%; padding: 0 0 40px;
+}
+.viz-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg); z-index: 20;
+  max-width: 900px; margin: 0 auto; width: 100%;
+}
+.viz-header h2 { font-family: var(--ff-head); font-size: 1.3rem; flex: 1; }
+.viz-body { padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+/* Map */
+#map-container {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); position: relative;
+}
+#map-svg { display: block; width: 100%; height: auto; }
+.map-tooltip {
+  position: fixed; background: var(--text); color: #fff;
+  border-radius: 8px; padding: 8px 12px; font-size: .78rem;
+  pointer-events: none; max-width: 200px; line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2); z-index: 200; display: none;
+}
+.map-bubble {
+  cursor: pointer; fill: var(--accent); fill-opacity: .65;
+  stroke: var(--accent); stroke-width: 1.5; stroke-opacity: .9;
+  transition: fill-opacity .15s;
+}
+.map-bubble:hover { fill-opacity: .9; }
+.map-no-data { text-align: center; padding: 40px 20px; color: var(--muted); font-style: italic; }
+
+/* Timeline */
+.timeline-wrap { position: relative; padding: 0 0 0 28px; }
+.timeline-line {
+  position: absolute; left: 10px; top: 8px; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.tl-year-group { margin-bottom: 32px; }
+.tl-year-label {
+  font-family: var(--ff-head); font-size: 1.5rem; font-style: italic;
+  color: var(--accent); margin-bottom: 12px; position: relative; padding-left: 2px;
+}
+.tl-year-label::before {
+  content: ''; position: absolute; left: -25px; top: 50%;
+  transform: translateY(-50%); width: 14px; height: 14px;
+  background: var(--accent); border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
+}
+.tl-month-group { margin-bottom: 14px; padding-left: 6px; }
+.tl-month-label {
+  font-size: .78rem; font-weight: 500; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+}
+.tl-memory-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
+  cursor: pointer; transition: border-color .12s;
+}
+.tl-memory-pill:hover { border-color: var(--accent); }
+.tl-pill-what {
+  font-size: .88rem; font-weight: 500; color: var(--text);
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tl-pill-tag {
+  font-size: .72rem; background: var(--accent-l); color: var(--accent);
+  border-radius: 20px; padding: 1px 8px; white-space: nowrap; flex-shrink: 0;
+}
+.tl-detail-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-top: none; border-radius: 0 0 8px 8px; margin-top: -6px;
+  margin-bottom: 6px; padding: 12px 16px; display: none;
+}
+.tl-detail-wrap.open { display: block; }
+.tl-undated { margin-top: 20px; }
+.tl-undated-label {
+  font-size: .78rem; font-weight: 500; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+}
+
+/* ── Modal ───────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(42,34,24,.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 100; padding: 0; animation: backdropIn .15s ease;
+}
+@keyframes backdropIn { from { opacity:0; } to { opacity:1; } }
+.modal {
+  background: var(--surface); border-radius: var(--radius) var(--radius) 0 0;
+  padding: 24px 20px 32px; width: 100%; max-width: 640px;
+  animation: slideUp .2s ease; max-height: 92vh; overflow-y: auto;
+}
+@keyframes slideUp { from { transform:translateY(40px); opacity:0; } to { transform:none; opacity:1; } }
+.modal h2 { font-family: var(--ff-head); font-size: 1.3rem; margin-bottom: 4px; }
+.modal-subtitle { font-size: .8rem; color: var(--muted); margin-bottom: 18px; }
+.modal .form-grid { display: flex; flex-direction: column; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-actions .btn { flex: 1; }
+
+/* Fill-in-the-blank form */
+.blank-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid var(--border);
+}
+.blank-row:last-of-type { border-bottom: none; }
+.blank-label {
+  font-family: var(--ff-head); font-size: 1rem; font-style: italic;
+  color: var(--accent); white-space: nowrap; padding-top: 10px;
+  min-width: 52px; text-align: right; flex-shrink: 0;
+}
+.req { color: var(--accent); margin-left: 1px; font-style: normal; }
+.blank-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.chip-input-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 8px;
+  background: var(--bg); cursor: text; transition: border-color .15s; min-height: 42px;
+}
+.chip-input-box:focus-within { border-color: var(--accent); }
+.chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--accent-l); color: var(--accent); border-radius: 20px;
+  padding: 2px 8px 2px 10px; font-size: .82rem; font-weight: 500;
+  white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+}
+.chip-remove {
+  background: none; border: none; cursor: pointer; color: var(--accent);
+  font-size: .78rem; line-height: 1; padding: 0; opacity: .65; flex-shrink: 0;
+}
+.chip-remove:hover { opacity: 1; }
+.chip-text-input {
+  border: none; outline: none; background: transparent;
+  font-family: var(--ff-body); font-size: .9rem; color: var(--text);
+  min-width: 80px; flex: 1; padding: 2px 0;
+}
+.chip-text-input::placeholder { color: var(--muted); }
+.blank-textarea {
+  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: var(--ff-body); font-size: .95rem;
+  background: var(--bg); color: var(--text); outline: none;
+  transition: border-color .15s; resize: vertical; line-height: 1.55;
+}
+.blank-textarea:focus { border-color: var(--accent); }
+.blank-hint { font-size: .71rem; color: var(--muted); padding-left: 2px; }
+.quick-date-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.quick-date-pill { border:1.5px solid var(--border); background:var(--surface); border-radius:20px; padding:4px 10px; font-family:var(--ff-body); font-size:.78rem; color:var(--text); cursor:pointer; }
+.quick-date-pill:hover { background:var(--accent-l); border-color:var(--accent); color:var(--accent); }
+.user-note { font-size:.75rem; color:var(--muted); margin-top:4px; }
+
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(12px);
+  background: var(--text); color: #fff; border-radius: 999px; padding: 10px 16px;
+  font-size: .86rem; box-shadow: 0 4px 18px rgba(42,34,24,.22); z-index: 120;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* FAB */
+.fab {
+  position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px;
+  border-radius: 50%; background: var(--accent); color: #fff; border: none;
+  font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(196,112,58,.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, box-shadow .15s; z-index: 50;
+}
+.fab:hover { transform: scale(1.07); box-shadow: 0 6px 24px rgba(196,112,58,.5); }
+.fab:active { transform: scale(.95); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+@media (min-width: 640px) {
+  .modal-backdrop { align-items: center; padding: 24px; }
+  .modal { border-radius: var(--radius); max-height: 80vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════
+     LOCK SCREEN
+     NOTE: Passcode stored in localStorage is NOT
+     cryptographically secure. v1 convenience lock only.
+     Future: use hashed + salted passcode or server auth.
+════════════════════════════════════════════════════ -->
+<div id="lock-screen" class="screen">
+  <div class="jar-icon">🫙</div>
+  <h1>Memory Jar</h1>
+  <p id="lock-subtitle">Keep your moments safe.</p>
+  <div class="lock-card" id="setup-card">
+    <div>
+      <label for="setup-user">Create username</label>
+      <input type="text" id="setup-user" maxlength="24" autocomplete="username" placeholder="e.g. jake" />
+      <div class="user-note">Usernames keep jars separate on this device.</div>
+    </div>
+    <div>
+      <label for="setup-pass">Create a passcode (4–12 chars)</label>
+      <input type="password" id="setup-pass" maxlength="12" autocomplete="new-password" placeholder="••••" />
+    </div>
+    <div>
+      <label for="setup-confirm">Confirm passcode</label>
+      <input type="password" id="setup-confirm" maxlength="12" autocomplete="new-password" placeholder="••••" />
+    </div>
+    <div class="error-msg" id="setup-error"></div>
+    <button class="btn btn-primary" onclick="createAccount()">Create Jar</button>
+  </div>
+  <div class="lock-card hidden" id="unlock-card">
+    <div>
+      <label for="unlock-user">Username</label>
+      <input type="text" id="unlock-user" maxlength="24" autocomplete="username" placeholder="username" />
+    </div>
+    <div>
+      <label for="unlock-pass">Passcode</label>
+      <input type="password" id="unlock-pass" maxlength="12" autocomplete="current-password" placeholder="••••"
+        onkeydown="if(event.key==='Enter')unlock()" />
+    </div>
+    <div class="error-msg" id="unlock-error"></div>
+    <button class="btn btn-primary" onclick="unlock()">Open Jar</button>
+  </div>
+  <button class="reset-link" onclick="resetApp()">Reset App</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     MAIN APP SCREEN
+════════════════════════════════════════════════════ -->
+<div id="app-screen">
+  <header class="app-header">
+    <h1>🫙 Memory Jar</h1>
+    <div class="header-actions">
+      <!-- Visualize dropdown -->
+      <div class="viz-dropdown-wrap" id="viz-wrap">
+        <button class="viz-btn" onclick="toggleVizMenu()" id="viz-toggle-btn">
+          Visualize <span style="font-size:.7rem;">▾</span>
+        </button>
+        <div class="viz-dropdown hidden" id="viz-menu">
+          <button onclick="openViz('map')">🗺&nbsp; Map</button>
+          <button onclick="openViz('timeline')">📅&nbsp; Timeline</button>
+        </div>
+      </div>
+      <button class="btn-icon" title="Lock" onclick="lockApp()">🔒</button>
+      <button class="btn-icon" title="Settings" onclick="showSettings()">⚙️</button>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="Search memories…" oninput="renderList()" />
+  </div>
+
+  <div class="pwa-install-card" id="pwa-install-card">
+    <div class="pwa-install-copy">Install Memory Jar on your phone for a cleaner, app-like experience.</div>
+    <button class="btn btn-primary btn-sm" id="pwa-install-btn">Install</button>
+  </div>
+
+
+  <!-- Prompt -->
+  <div class="section" id="prompt-section">
+    <div class="section-label">Today's nudge</div>
+    <div class="prompt-card" id="prompt-card">
+      <div class="prompt-text" id="prompt-text"></div>
+      <div class="prompt-meta" id="prompt-meta"></div>
+    </div>
+    <div class="prompt-actions">
+      <button class="btn btn-ghost btn-sm" onclick="shufflePrompt()">New prompt ↺</button>
+      <button class="btn btn-primary btn-sm" onclick="usePrompt()">Use as a nudge</button>
+    </div>
+  </div>
+
+
+  <!-- Random Memory -->
+  <div class="section">
+    <div class="section-label">From the Jar</div>
+    <div class="random-card" id="random-card">
+      <div class="empty-state">Your jar is empty. Drop in the first small moment.</div>
+    </div>
+    <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" onclick="showRandom()">Shuffle ↺</button>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn btn-ghost btn-sm" onclick="exportJSON()">⬇ Export JSON</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteAll()">🗑 Clear Jar</button>
+  </div>
+
+  <!-- Tag Cloud -->
+  <div class="tag-cloud-section">
+    <div class="section-label">Browse by tag</div>
+    <div class="tag-cloud" id="tag-cloud">
+      <span style="font-size:.82rem;color:var(--muted);font-style:italic;">No tags yet.</span>
+    </div>
+  </div>
+
+  <!-- Memory List -->
+  <div class="section" style="margin-top:8px;">
+    <div class="section-label">In the Jar</div>
+    <div class="memory-list" id="memory-list"></div>
+    <div id="list-empty" class="empty-state hidden">No memories match your search.</div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab hidden" id="fab" title="Add to Jar" onclick="openAddModal()">+</button>
+
+<!-- ════════════════════════════════════════════════════
+     TAG PAGE
+════════════════════════════════════════════════════ -->
+<div id="tag-page">
+  <div class="tag-page-header">
+    <button class="btn btn-ghost btn-sm" onclick="closeTagPage()">← Back</button>
+    <div class="tag-page-title">
+      <span id="tag-page-title-text">Tag</span>
+      <span class="tag-page-badge" id="tag-page-count"></span>
+    </div>
+  </div>
+  <div style="padding:20px 20px 0;">
+    <div class="memory-list" id="tag-memory-list"></div>
+    <div id="tag-list-empty" class="empty-state hidden">No memories with this tag.</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     VIZ PAGE (shared chrome for map + timeline)
+════════════════════════════════════════════════════ -->
+<div id="viz-page">
+  <div class="viz-header">
+    <button class="btn btn-ghost btn-sm" onclick="closeViz()">← Back</button>
+    <h2 id="viz-title">Visualization</h2>
+  </div>
+  <div class="viz-body" id="viz-body"></div>
+</div>
+
+<!-- Map tooltip -->
+<div class="map-tooltip" id="map-tooltip"></div>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<!-- ════════════════════════════════════════════════════
+     ADD MEMORY MODAL
+════════════════════════════════════════════════════ -->
+<div class="modal-backdrop hidden" id="add-modal" onclick="handleBackdropClick(event,'add-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Add to Jar</h2>
+    <p class="modal-subtitle">Keep it simple. Capture one small moment — <em>What</em> is required plus at least one other field.</p>
+    <div id="add-prompt-line" style="margin:-10px 0 14px;color:var(--muted);font-size:.82rem;"></div>
+    <div class="form-grid">
+      <div class="blank-row">
+        <div class="blank-label">What<span class="req">*</span></div>
+        <div class="blank-input-wrap">
+          <textarea class="blank-textarea" id="f-what" rows="3" placeholder="What moment do you want to keep?"></textarea>
+        </div>
+      </div>
+      <div class="blank-row">
+        <div class="blank-label">Who</div>
+        <div class="blank-input-wrap">
+          <div class="chip-input-box" id="chip-box-who" onclick="focusChipInput('who')">
+            <input class="chip-text-input" id="chip-input-who" placeholder="Add a person"
+              onkeydown="chipKeydown(event,'who')" oninput="chipPaste(event,'who')" />
+          </div>
+          <div class="blank-hint">Press Enter or ; between multiple entries</div>
+        </div>
+      </div>
+      <div class="blank-row">
+        <div class="blank-label">When</div>
+        <div class="blank-input-wrap">
+          <div class="chip-input-box" id="chip-box-when" onclick="focusChipInput('when')">
+            <input class="chip-text-input" id="chip-input-when" placeholder="e.g. Summer 2019; last Tuesday"
+              onkeydown="chipKeydown(event,'when')" oninput="chipPaste(event,'when')" />
+          </div>
+          <div class="blank-hint">Press Enter or ; between multiple entries</div>
+          <div class="quick-date-row" id="quick-date-row"></div>
+        </div>
+      </div>
+      <div class="blank-row">
+        <div class="blank-label">Where</div>
+        <div class="blank-input-wrap">
+          <div class="chip-input-box" id="chip-box-where" onclick="focusChipInput('where')">
+            <input class="chip-text-input" id="chip-input-where" placeholder="e.g. Paris; Grandma's kitchen"
+              onkeydown="chipKeydown(event,'where')" oninput="chipPaste(event,'where')" />
+          </div>
+          <div class="blank-hint">Press Enter or ; between multiple entries</div>
+        </div>
+      </div>
+      <div class="blank-row">
+        <div class="blank-label">Why</div>
+        <div class="blank-input-wrap">
+          <textarea class="blank-textarea" id="f-why" rows="3" placeholder="Why do you want to keep this?"></textarea>
+        </div>
+      </div>
+      <div class="blank-row">
+        <div class="blank-label" style="font-style:normal;font-size:.78rem;letter-spacing:.04em;color:var(--muted);padding-top:11px;">Title</div>
+        <div class="blank-input-wrap">
+          <input type="text" class="blank-textarea" id="f-title" placeholder="Give this memory a name (optional)" style="resize:none;" />
+        </div>
+      </div>
+      <div class="error-msg" id="add-error" style="padding-top:6px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMemory()">Drop it in</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     SETTINGS MODAL
+════════════════════════════════════════════════════ -->
+<div class="modal-backdrop hidden" id="settings-modal" onclick="handleBackdropClick(event,'settings-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Settings</h2>
+    <p style="color:var(--muted);font-size:.88rem;margin-bottom:16px;">Change your passcode, prompt settings, or reset the app entirely.</p>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Current passcode</label>
+        <input type="password" id="s-current" maxlength="12" placeholder="••••" class="blank-textarea" style="resize:none;" />
+      </div>
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">New passcode (4–12 chars)</label>
+        <input type="password" id="s-new" maxlength="12" placeholder="••••" class="blank-textarea" style="resize:none;" />
+      </div>
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;">Confirm new passcode</label>
+        <input type="password" id="s-confirm" maxlength="12" placeholder="••••" class="blank-textarea" style="resize:none;" />
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+        <input type="checkbox" id="s-reflective" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <label for="s-reflective" style="font-size:.86rem;color:var(--text);cursor:pointer;">
+          Include occasional reflective prompts (optional)
+        </label>
+      </div>
+      <div style="font-size:.74rem;color:var(--muted);margin-top:-6px;">
+        Off by default. When on, you may see prompts that feel a bit deeper — still gentle.
+      </div>
+
+      <div class="error-msg" id="settings-error"></div>
+      <div style="color:#4caf50;font-size:.82rem;" id="settings-ok"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('settings-modal')">Close</button>
+      <button class="btn btn-primary" onclick="changePasscode()">Update Passcode</button>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+      <button class="btn btn-danger btn-sm" onclick="resetApp()">Reset App</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════ -->
+<script>
+/* ═══ STORAGE ═══════════════════════════════════════ */
+const KEY_USERS    = 'mj_users';      // { username: { passcode } } — plain-text v1 convenience lock
+const KEY_CURRENT  = 'mj_current_user';
+const KEY_MEMORIES = 'mj_memories';   // legacy key from earlier versions
+const KEY_SETTINGS = 'mj_settings';
+const KEY_PROMPT   = 'mj_prompt_state';
+
+let currentUser = null;
+
+const $ = id => document.getElementById(id);
+
+function normalizeUser(u){ return (u || '').trim().toLowerCase().replace(/\s+/g,'-'); }
+function memoryKey(user=currentUser){ return user ? `mj_memories_${user}` : KEY_MEMORIES; }
+function settingsKey(user=currentUser){ return user ? `mj_settings_${user}` : KEY_SETTINGS; }
+function promptKey(user=currentUser){ return user ? `mj_prompt_state_${user}` : KEY_PROMPT; }
+
+function loadUsers(){
+  try { return JSON.parse(localStorage.getItem(KEY_USERS)) || {}; }
+  catch { return {}; }
+}
+function saveUsers(users){ localStorage.setItem(KEY_USERS, JSON.stringify(users)); }
+function userExists(username){ return !!loadUsers()[normalizeUser(username)]; }
+
+function loadSettings(){
+  try { return JSON.parse(localStorage.getItem(settingsKey())) || { reflectivePrompts:false }; }
+  catch { return { reflectivePrompts:false }; }
+}
+function saveSettings(s){ localStorage.setItem(settingsKey(), JSON.stringify(s)); }
+
+function todayISO(){
+  const d = new Date();
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tzOffset).toISOString().slice(0,10);
+}
+function displayDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+function recentDateOptions(){
+  const out=[];
+  for(let i=0;i<3;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const tzOffset=d.getTimezoneOffset()*60000;
+    const iso=new Date(d.getTime()-tzOffset).toISOString().slice(0,10);
+    out.push({iso,label:i===0?'Today':i===1?'Yesterday':displayDate(iso)});
+  }
+  return out;
+}
+
+function loadMemories() {
+  try { return JSON.parse(localStorage.getItem(memoryKey())) || []; }
+  catch { return []; }
+}
+function saveMemories(arr) { localStorage.setItem(memoryKey(), JSON.stringify(arr)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})
+       + ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fieldArr(val) {
+  if (!val || (Array.isArray(val) && val.length === 0)) return [];
+  if (Array.isArray(val)) return val.filter(Boolean);
+  return val.split(';').map(s => s.trim()).filter(Boolean);
+}
+function chipsHTML(arr) {
+  if (!arr.length) return '';
+  return `<span class="chip-display">${arr.map(t=>`<span class="chip-tag">${esc(t)}</span>`).join('')}</span>`;
+}
+
+function requirePasscode(actionLabel){
+  if(!currentUser){ alert('Please unlock your jar first.'); return false; }
+  const entered = prompt(`Enter your passcode to ${actionLabel}:`);
+  if(entered === null) return false;
+  const user = loadUsers()[currentUser];
+  if(user && entered === user.passcode) return true;
+  alert('Incorrect passcode. Nothing was deleted.');
+  return false;
+}
+
+
+/* ═══ PROMPTS (UX + Emotional Depth) ═════════════════ */
+const PROMPTS_GENTLE = [
+  "What’s one small moment today you’d like to keep?",
+  "What made you smile today (even briefly)?",
+  "What did you notice that you usually miss?",
+  "What was unexpectedly nice today?",
+  "What felt cozy or comforting today?",
+  "What’s a tiny win from today?",
+  "What’s something your child/partner/pet did that you want to remember?",
+  "What was a good sound, smell, or taste from today?",
+  "Where were you when you felt most calm today?",
+  "What’s one detail from today’s weather or light you don’t want to forget?"
+];
+
+const PROMPTS_REFLECTIVE = [
+  "What did you appreciate about someone today?",
+  "What’s something you handled better than you used to?",
+  "What felt meaningful today, even if it was simple?",
+  "What do you want your future self to remember about today?"
+];
+
+let activePrompt = null; // { text, date, kind }
+
+function pickPromptForToday(forceNew=false){
+  const settings = loadSettings();
+  const stored = (() => { try { return JSON.parse(localStorage.getItem(promptKey())) || null; } catch { return null; } })();
+  const t = todayISO();
+
+  if(!forceNew && stored && stored.date === t && stored.text){
+    activePrompt = stored;
+    return activePrompt;
+  }
+
+  const pool = settings.reflectivePrompts
+    ? PROMPTS_GENTLE.concat(PROMPTS_REFLECTIVE.map(p=>({__kind:'reflective', text:p})))
+    : PROMPTS_GENTLE;
+
+  // deterministic-ish: seed by date, then allow reshuffle
+  const seed = Array.from(t).reduce((a,c)=>a+c.charCodeAt(0),0);
+  const rand = (seed * 9301 + 49297) % 233280;
+  let idx = rand % pool.length;
+
+  let pick = pool[idx];
+  let kind = 'gentle';
+  let textVal = pick;
+
+  if (typeof pick === 'object' && pick.text){
+    textVal = pick.text;
+    kind = pick.__kind || 'reflective';
+  }
+
+  activePrompt = { date: t, kind, text: textVal };
+  localStorage.setItem(promptKey(), JSON.stringify(activePrompt));
+  return activePrompt;
+}
+
+function renderPrompt(){
+  const card = $('prompt-card');
+  const txt = $('prompt-text');
+  const meta = $('prompt-meta');
+
+  // hide prompt section if not unlocked/app visible
+  if(!$('app-screen') || $('app-screen').style.display==='none') return;
+
+  const p = pickPromptForToday(false);
+  if(!p || !p.text){
+    $('prompt-section').classList.add('hidden');
+    return;
+  }
+  $('prompt-section').classList.remove('hidden');
+  txt.textContent = p.text;
+
+  const settings = loadSettings();
+  const kindLabel = p.kind === 'reflective' ? 'Reflective (optional)' : 'Gentle';
+  const reflectStatus = settings.reflectivePrompts ? 'Reflective prompts: on' : 'Reflective prompts: off';
+  meta.textContent = `${kindLabel} · ${reflectStatus}`;
+}
+
+function shufflePrompt(){
+  pickPromptForToday(true);
+  renderPrompt();
+}
+
+function usePrompt(){
+  // Opens the add modal and uses prompt as a soft guide (not required)
+  pickPromptForToday(false);
+  openAddModal(true);
+}
+
+
+/* ═══ LOCK / ACCOUNT ═══════════════════════════════ */
+function init() {
+  const users = loadUsers();
+  const legacyPass = localStorage.getItem('mj_passcode');
+
+  // One-time migration for older V3/V4 test jars: creates a default local user.
+  if (legacyPass && !Object.keys(users).length) {
+    users['default'] = { passcode: legacyPass };
+    saveUsers(users);
+    const legacyMemories = (() => { try { return JSON.parse(localStorage.getItem(KEY_MEMORIES)) || []; } catch { return []; } })();
+    if (legacyMemories.length && !localStorage.getItem(memoryKey('default'))) {
+      localStorage.setItem(memoryKey('default'), JSON.stringify(legacyMemories));
+    }
+  }
+
+  if (Object.keys(loadUsers()).length) {
+    $('setup-card').classList.add('hidden');
+    $('unlock-card').classList.remove('hidden');
+    $('lock-subtitle').textContent = 'Unlock to open your jar.';
+    const last = localStorage.getItem(KEY_CURRENT) || '';
+    $('unlock-user').value = last;
+    setTimeout(() => (last ? $('unlock-pass') : $('unlock-user')).focus(), 100);
+  } else {
+    $('setup-card').classList.remove('hidden');
+    $('unlock-card').classList.add('hidden');
+    setTimeout(() => $('setup-user').focus(), 100);
+  }
+}
+function createAccount() {
+  const u = normalizeUser($('setup-user').value);
+  const p = $('setup-pass').value, c = $('setup-confirm').value;
+  const users = loadUsers();
+  if (u.length < 2) return showErr('setup-error','Username must be at least 2 characters.');
+  if (users[u]) return showErr('setup-error','That username already exists on this device.');
+  if (p.length < 4) return showErr('setup-error','Passcode must be at least 4 characters.');
+  if (p !== c) return showErr('setup-error','Passcodes do not match.');
+  users[u] = { passcode:p };
+  saveUsers(users);
+  currentUser = u;
+  localStorage.setItem(KEY_CURRENT, u);
+  showApp();
+}
+function unlock() {
+  const u = normalizeUser($('unlock-user').value);
+  const p = $('unlock-pass').value;
+  const user = loadUsers()[u];
+  if (user && p === user.passcode) {
+    currentUser = u;
+    localStorage.setItem(KEY_CURRENT, u);
+    showApp();
+  } else {
+    showErr('unlock-error','Incorrect username or passcode. Try again.');
+    $('unlock-pass').value = ''; $('unlock-pass').focus();
+  }
+}
+function lockApp() {
+  hideAllPages();
+  $('lock-screen').classList.remove('hidden');
+  $('unlock-card').classList.remove('hidden');
+  $('setup-card').classList.add('hidden');
+  $('unlock-user').value = currentUser || localStorage.getItem(KEY_CURRENT) || '';
+  $('unlock-pass').value = '';
+  currentUser = null;
+  setTimeout(() => $('unlock-pass').focus(), 100);
+}
+function showApp() {
+  $('lock-screen').classList.add('hidden');
+  hideAllPages();
+  $('app-screen').style.display = 'flex';
+  $('fab').classList.remove('hidden');
+  renderAll();
+}
+function resetApp() {
+  if(currentUser && !requirePasscode('reset the entire app')) return;
+  if (!confirm('⚠️ This will permanently delete ALL local users, memories, settings, and passcodes. Are you sure?')) return;
+  Object.keys(localStorage).filter(k => k.startsWith('mj_')).forEach(k => localStorage.removeItem(k));
+  location.reload();
+}
+function showErr(id, msg) { $(id).textContent = msg; }
+function showToast(msg) {
+  const t = $('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+
+/* ═══ PAGE NAV ═══════════════════════════════════════ */
+function hideAllPages() {
+  $('app-screen').style.display  = 'none';
+  $('tag-page').style.display    = 'none';
+  $('viz-page').style.display    = 'none';
+  $('fab').classList.add('hidden');
+}
+
+/* ═══ SETTINGS ═══════════════════════════════════════ */
+function showSettings() {
+  $('s-current').value = $('s-new').value = $('s-confirm').value = '';
+  $('settings-error').textContent = $('settings-ok').textContent = '';
+  const s = loadSettings();
+  $('s-reflective').checked = !!s.reflectivePrompts;
+  $('settings-modal').classList.remove('hidden');
+}
+function changePasscode() {
+  const cur=$('s-current').value, nw=$('s-new').value, cf=$('s-confirm').value;
+  if (!currentUser || cur !== loadUsers()[currentUser].passcode) return showErr('settings-error','Current passcode is incorrect.');
+  if (nw.length < 4) return showErr('settings-error','New passcode must be at least 4 chars.');
+  if (nw !== cf)     return showErr('settings-error','New passcodes do not match.');
+  const users = loadUsers(); users[currentUser].passcode = nw; saveUsers(users);
+  // Save prompt preference
+  const s = loadSettings();
+  s.reflectivePrompts = !!$('s-reflective').checked;
+  saveSettings(s);
+  $('settings-error').textContent = '';
+  $('settings-ok').textContent = '✓ Passcode updated!';
+  $('s-current').value = $('s-new').value = $('s-confirm').value = '';
+}
+
+/* ═══ CHIP INPUT ═════════════════════════════════════ */
+const chipTags = { who:[], when:[], where:[] };
+
+function renderChips(field) {
+  const box = $('chip-box-'+field), input = $('chip-input-'+field);
+  [...box.querySelectorAll('.chip')].forEach(c => c.remove());
+  chipTags[field].forEach((tag,i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${esc(tag)}<button class="chip-remove" onclick="removeChip('${field}',${i})">×</button>`;
+    box.insertBefore(chip, input);
+  });
+}
+function addChip(field, value) {
+  const v = value.trim().replace(/;+$/,'').trim();
+  if (!v) return;
+  v.split(';').forEach(part => {
+    const p = part.trim();
+    if (p && !chipTags[field].includes(p)) chipTags[field].push(p);
+  });
+  renderChips(field);
+}
+function removeChip(field, idx) { chipTags[field].splice(idx,1); renderChips(field); }
+function focusChipInput(field) { $('chip-input-'+field).focus(); }
+function chipKeydown(e, field) {
+  const input = e.target;
+  if (e.key==='Enter'||e.key===';') { e.preventDefault(); addChip(field,input.value); input.value=''; }
+  else if (e.key==='Backspace' && input.value==='' && chipTags[field].length) {
+    chipTags[field].pop(); renderChips(field);
+  }
+}
+function chipPaste(e, field) {
+  const input = e.target;
+  if (input.value.includes(';')) {
+    const parts = input.value.split(';');
+    parts.slice(0,-1).forEach(p => addChip(field,p));
+    input.value = parts[parts.length-1];
+  }
+}
+function clearChips() {
+  ['who','when','where'].forEach(f => { chipTags[f]=[]; renderChips(f); $('chip-input-'+f).value=''; });
+}
+
+/* ═══ QUICK DATE CHIPS ═════════════════════════════ */
+function renderQuickDates(){
+  const row = $('quick-date-row');
+  if(!row) return;
+  row.innerHTML = recentDateOptions().map(d =>
+    `<button type="button" class="quick-date-pill" onclick="selectQuickDate('${d.iso}')">${d.label}</button>`
+  ).join('');
+}
+function selectQuickDate(iso){
+  chipTags.when = [iso];
+  $('chip-input-when').value = '';
+  renderChips('when');
+}
+
+/* ═══ ADD / SAVE MEMORY ══════════════════════════════ */
+function openAddModal(fromPrompt=false) {
+  $('f-what').value=''; $('f-why').value=''; $('f-title').value='';
+  clearChips(); addChip('when', todayISO()); renderQuickDates(); $('add-error').textContent='';
+  // Soft prompt guidance (optional)
+  const p = pickPromptForToday(false);
+  const line = $('add-prompt-line');
+  if (fromPrompt && p && p.text) {
+    line.innerHTML = `Prompt (optional): <span style="color:var(--text);">${esc(p.text)}</span>`;
+    $('f-what').setAttribute('placeholder', `Optional prompt: ${p.text}
+
+What moment do you want to keep?`);
+  } else {
+    line.textContent = '';
+    $('f-what').setAttribute('placeholder', 'What moment do you want to keep?');
+  }
+
+  $('add-modal').classList.remove('hidden');
+  setTimeout(() => $('f-what').focus(), 150);
+}
+function saveMemory() {
+  const title=$('f-title').value.trim(), what=$('f-what').value.trim(), why=$('f-why').value.trim();
+  ['who','when','where'].forEach(f => {
+    const v=$('chip-input-'+f).value.trim();
+    if(v){ addChip(f,v); $('chip-input-'+f).value=''; }
+  });
+  const who=chipTags.who.join('; '), when=chipTags.when.join('; '), where=chipTags.where.join('; ');
+  if (!what) return showErr('add-error','Add the moment you want to keep first.');
+  if (!who&&!when&&!where&&!why&&!title) return showErr('add-error','Add one more detail before dropping it in.');
+  const memory = {
+    id:uid(), createdAt:new Date().toISOString(),
+    memoryDate: chipTags.when[0] || todayISO(),
+    title, what, why,
+    who:chipTags.who.slice(), when:chipTags.when.slice(), where:chipTags.where.slice()
+  };
+  const memories=loadMemories(); memories.unshift(memory); saveMemories(memories);
+  closeModal('add-modal'); renderAll(); showToast('Dropped safely into your jar.');
+}
+
+/* ═══ DELETE / EXPORT ════════════════════════════════ */
+function deleteMemory(id) {
+  if(!confirm('Remove this memory from the jar?')) return;
+  if(!requirePasscode('delete this memory')) return;
+  saveMemories(loadMemories().filter(m=>m.id!==id));
+  renderAll();
+  // refresh tag page if open
+  if($('tag-page').style.display!=='none') openTagPage($('tag-page').dataset.tag);
+}
+function deleteAll() {
+  if(!confirm('⚠️ Clear this jar? This deletes all memories for the current user only.')) return;
+  if(!requirePasscode('clear your jar')) return;
+  saveMemories([]); renderAll();
+}
+function exportJSON() {
+  const memories=loadMemories();
+  if(!memories.length) return alert('Your jar is empty — nothing to export yet.');
+  const blob=new Blob([JSON.stringify(memories,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='memory-jar-export-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ═══ RENDERING ══════════════════════════════════════ */
+function renderMemoryCardHTML(m) {
+  const whoArr=fieldArr(m.who), whenArr=fieldArr(m.when), whereArr=fieldArr(m.where);
+  const fields=[
+    whoArr.length   && `<div class="memory-field"><strong>Who:</strong> ${chipsHTML(whoArr)}</div>`,
+    whenArr.length  && `<div class="memory-field"><strong>When:</strong> ${chipsHTML(whenArr)}</div>`,
+    whereArr.length && `<div class="memory-field"><strong>Where:</strong> ${chipsHTML(whereArr)}</div>`,
+    m.why           && `<div class="memory-field"><strong>Why:</strong> ${esc(m.why)}</div>`,
+  ].filter(Boolean).join('');
+  return `${m.title?`<div class="memory-title">${esc(m.title)}</div>`:''}
+    <div class="memory-field" style="font-size:.95rem;color:var(--text);margin-bottom:10px;">${esc(m.what)}</div>
+    <div class="memory-fields">${fields}</div>
+    <div class="card-footer">
+      <span class="memory-ts">${fmt(m.createdAt)}</span>
+      <button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id}')">Delete</button>
+    </div>`;
+}
+
+function memoryItemHTML(m) {
+  const whoArr=fieldArr(m.who), whenArr=fieldArr(m.when), whereArr=fieldArr(m.where);
+  const meta=[whoArr[0],whenArr[0],whereArr[0]].filter(Boolean).join(' · ');
+  const fields=[
+    whoArr.length   && `<div class="memory-field"><strong>Who:</strong> ${chipsHTML(whoArr)}</div>`,
+    whenArr.length  && `<div class="memory-field"><strong>When:</strong> ${chipsHTML(whenArr)}</div>`,
+    whereArr.length && `<div class="memory-field"><strong>Where:</strong> ${chipsHTML(whereArr)}</div>`,
+    m.why           && `<div class="memory-field"><strong>Why:</strong> ${esc(m.why)}</div>`,
+  ].filter(Boolean).join('');
+  return `<div class="memory-item" id="item-${m.id}">
+    <button class="memory-summary" onclick="toggleItem('item-${m.id}')">
+      <div class="memory-summary-text">
+        <div class="memory-summary-what">${esc(m.title||m.what)}</div>
+        <div class="memory-summary-meta">${esc(meta)||esc(m.what.slice(0,50))} · ${fmt(m.createdAt)}</div>
+      </div>
+      <span class="chevron">▼</span>
+    </button>
+    <div class="memory-detail">
+      ${m.title?`<div class="memory-field"><strong>Title:</strong> ${esc(m.title)}</div>`:''}
+      <div class="memory-field"><strong>What:</strong> ${esc(m.what)}</div>
+      ${fields}
+      <div class="detail-actions">
+        <button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id}')">🗑 Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══ RANDOM MEMORY ══════════════════════════════════ */
+let lastRandomId = null;
+function showRandom(pool) {
+  const memories = pool || loadMemories();
+  const card = $('random-card');
+  if (!memories.length) { card.innerHTML='<div class="empty-state">Your jar is empty. Drop in the first small moment.</div>'; return; }
+  let choices = memories.filter(m=>m.id!==lastRandomId);
+  if (!choices.length) choices = memories;
+  const m = choices[Math.floor(Math.random()*choices.length)];
+  lastRandomId = m.id;
+  card.innerHTML = renderMemoryCardHTML(m);
+}
+
+/* ═══ MEMORY LIST ════════════════════════════════════ */
+function renderList() {
+  const query=($('search-input').value||'').toLowerCase().trim();
+  let memories=loadMemories();
+  if (query) {
+    memories=memories.filter(m=>{
+      const flat=[m.title||'',m.what||'',m.why||'',
+        fieldArr(m.who).join(' '),fieldArr(m.when).join(' '),fieldArr(m.where).join(' ')
+      ].join(' ').toLowerCase();
+      return flat.includes(query);
+    });
+  }
+  const list=$('memory-list'), empty=$('list-empty');
+  if(!memories.length){list.innerHTML='';empty.classList.remove('hidden');return;}
+  empty.classList.add('hidden');
+  list.innerHTML=memories.map(memoryItemHTML).join('');
+}
+
+function toggleItem(id) {
+  const el=$(id);
+  if(el) el.classList.toggle('open');
+}
+
+/* ═══ TAG CLOUD ══════════════════════════════════════ */
+function buildTagCloud() {
+  // Gather every tag from all three chip fields across all memories
+  const counts={};
+  loadMemories().forEach(m=>{
+    [...fieldArr(m.who),...fieldArr(m.when),...fieldArr(m.where)].forEach(tag=>{
+      counts[tag]=(counts[tag]||0)+1;
+    });
+  });
+  const cloud=$('tag-cloud');
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){
+    cloud.innerHTML='<span style="font-size:.82rem;color:var(--muted);font-style:italic;">No tags yet.</span>';
+    return;
+  }
+  const maxC=entries[0][1], minC=entries[entries.length-1][1];
+  cloud.innerHTML=entries.map(([tag,count])=>{
+    const ratio = maxC===minC ? 0.5 : (count-minC)/(maxC-minC);
+    const fs=(0.78+ratio*0.5).toFixed(2);
+    const safeTag=tag.replace(/'/g,"\\'");
+    return `<button class="tag-cloud-pill" style="font-size:${fs}rem;" onclick="openTagPage('${safeTag}')">
+      <span class="pill-label">${esc(tag)}</span>
+      <span class="pill-count">${count}</span>
+    </button>`;
+  }).join('');
+}
+
+/* ═══ TAG PAGE ═══════════════════════════════════════ */
+function openTagPage(tag) {
+  const memories=loadMemories().filter(m=>
+    [...fieldArr(m.who),...fieldArr(m.when),...fieldArr(m.where)].includes(tag)
+  );
+  hideAllPages();
+  $('tag-page').style.display='flex';
+  $('tag-page').dataset.tag=tag;
+  $('tag-page-title-text').textContent=tag;
+  $('tag-page-count').textContent=memories.length+' memor'+(memories.length===1?'y':'ies');
+  const list=$('tag-memory-list'), empty=$('tag-list-empty');
+  if(!memories.length){list.innerHTML='';empty.classList.remove('hidden');return;}
+  empty.classList.add('hidden');
+  list.innerHTML=memories.map(memoryItemHTML).join('');
+}
+function closeTagPage() { showApp(); }
+
+/* ═══ VISUALIZE DROPDOWN ═════════════════════════════ */
+function toggleVizMenu() { $('viz-menu').classList.toggle('hidden'); }
+document.addEventListener('click', e => {
+  if (!$('viz-wrap').contains(e.target)) $('viz-menu').classList.add('hidden');
+});
+function openViz(type) {
+  $('viz-menu').classList.add('hidden');
+  hideAllPages();
+  $('viz-page').style.display='flex';
+  if(type==='map')      renderMapViz();
+  if(type==='timeline') renderTimelineViz();
+}
+function closeViz() { showApp(); }
+
+/* ═══════════════════════════════════════════════════════
+   MAP VISUALIZATION
+   Geo-lookup table: ~300 cities, countries, US states.
+   Places not in the table are listed as "unmapped".
+   Projection: equirectangular  (x = lon, y = lat).
+══════════════════════════════════════════════════════ */
+const GEO = {
+  // Countries
+  "afghanistan":[33,65],"albania":[41,20],"algeria":[28,3],"angola":[-12,18],
+  "argentina":[-34,-64],"australia":[-25,133],"austria":[47,14],"azerbaijan":[40.5,47.5],
+  "bangladesh":[24,90],"belgium":[50.8,4.5],"bolivia":[-17,-65],"brazil":[-10,-55],
+  "bulgaria":[43,25],"cambodia":[13,105],"cameroon":[6,12],"canada":[56,-106],
+  "chile":[-30,-71],"china":[35,105],"colombia":[4,-72],"croatia":[45,16],
+  "cuba":[22,-80],"czech republic":[50,15],"czechia":[50,15],"denmark":[56,10],
+  "ecuador":[-2,-77.5],"egypt":[27,30],"ethiopia":[8,40],"finland":[64,26],
+  "france":[46,2],"germany":[51,10],"ghana":[8,-1],"greece":[39,22],
+  "guatemala":[15,-90],"hungary":[47,19],"india":[20,77],"indonesia":[-5,120],
+  "iran":[32,53],"iraq":[33,44],"ireland":[53,-8],"israel":[31,35],
+  "italy":[42,12],"japan":[36,138],"jordan":[31,36],"kazakhstan":[48,68],
+  "kenya":[1,38],"laos":[18,103],"lebanon":[34,36],"libya":[27,17],
+  "malaysia":[2,112],"mexico":[24,-102],"mongolia":[46,105],"morocco":[32,-6],
+  "mozambique":[-18,35],"myanmar":[17,96],"nepal":[28,84],"netherlands":[52.5,5.3],
+  "new zealand":[-41,174],"nicaragua":[13,-85],"nigeria":[10,8],"north korea":[40,127],
+  "norway":[64,26],"pakistan":[30,70],"peru":[-10,-75],"philippines":[13,122],
+  "poland":[52,20],"portugal":[39.5,-8],"romania":[46,25],"russia":[60,100],
+  "saudi arabia":[25,45],"senegal":[14,-14],"serbia":[44,21],"somalia":[6,46],
+  "south africa":[-29,25],"south korea":[37,128],"spain":[40,-3],"sri lanka":[7,81],
+  "sudan":[15,32],"sweden":[62,15],"switzerland":[47,8],"syria":[35,38],
+  "taiwan":[24,121],"tanzania":[-6,35],"thailand":[15,101],"turkey":[39,35],
+  "uganda":[1,32],"ukraine":[49,32],"united kingdom":[54,-2],"uk":[54,-2],
+  "great britain":[54,-2],"england":[52.4,-1.5],"scotland":[56.8,-4.2],"wales":[52.4,-3.4],
+  "united states":[38,-97],"usa":[38,-97],"us":[38,-97],"america":[38,-97],
+  "uzbekistan":[41,64],"venezuela":[8,-66],"vietnam":[16,108],"yemen":[15,48],
+  "zimbabwe":[-20,30],
+  // Major cities
+  "abu dhabi":[24.5,54.4],"accra":[5.5,-0.2],"addis ababa":[9,38.7],
+  "amsterdam":[52.4,4.9],"anchorage":[61.2,-149.9],"ankara":[39.9,32.9],
+  "athens":[37.9,23.7],"atlanta":[33.7,-84.4],"auckland":[-36.9,174.8],
+  "baghdad":[33.3,44.4],"bangkok":[13.8,100.5],"barcelona":[41.4,2.2],
+  "beijing":[39.9,116.4],"beirut":[33.9,35.5],"belgrade":[44.8,20.5],
+  "berlin":[52.5,13.4],"bogota":[4.7,-74.1],"boston":[42.4,-71.1],
+  "brussels":[50.8,4.4],"buenos aires":[-34.6,-58.4],"cairo":[30.1,31.2],
+  "cape town":[-33.9,18.4],"casablanca":[33.6,-7.6],"chicago":[41.9,-87.6],
+  "colombo":[6.9,79.9],"copenhagen":[55.7,12.6],"dallas":[32.8,-96.8],
+  "delhi":[28.6,77.2],"denver":[39.7,-105.0],"dubai":[25.2,55.3],
+  "dublin":[53.3,-6.3],"edinburgh":[55.9,-3.2],"frankfurt":[50.1,8.7],
+  "guangzhou":[23.1,113.3],"hanoi":[21.0,105.8],"havana":[23.1,-82.4],
+  "helsinki":[60.2,25.0],"ho chi minh city":[10.8,106.7],"hong kong":[22.3,114.2],
+  "houston":[29.8,-95.4],"istanbul":[41.0,29.0],"jakarta":[-6.2,106.8],
+  "johannesburg":[-26.2,28.0],"kabul":[34.5,69.2],"karachi":[24.9,67.0],
+  "kathmandu":[27.7,85.3],"kinshasa":[-4.3,15.3],"kuala lumpur":[3.1,101.7],
+  "lagos":[6.5,3.4],"lahore":[31.6,74.3],"lima":[-12.0,-77.0],
+  "lisbon":[38.7,-9.1],"london":[51.5,-0.1],"los angeles":[34.1,-118.2],"la":[34.1,-118.2],
+  "madrid":[40.4,-3.7],"manila":[14.6,121.0],"melbourne":[-37.8,145.0],
+  "mexico city":[19.4,-99.1],"miami":[25.8,-80.2],"milan":[45.5,9.2],
+  "minneapolis":[44.9,-93.2],"montreal":[45.5,-73.6],"moscow":[55.8,37.6],
+  "mumbai":[19.1,72.9],"nairobi":[-1.3,36.8],"new delhi":[28.6,77.2],
+  "new york":[40.7,-74.0],"new york city":[40.7,-74.0],"nyc":[40.7,-74.0],
+  "oslo":[59.9,10.8],"paris":[48.9,2.3],"perth":[-31.9,115.9],
+  "philadelphia":[40.0,-75.2],"phoenix":[33.4,-112.1],"prague":[50.1,14.4],
+  "rio de janeiro":[-22.9,-43.2],"rome":[41.9,12.5],"san francisco":[37.8,-122.4],
+  "sf":[37.8,-122.4],"santiago":[-33.5,-70.7],"sao paulo":[-23.5,-46.6],
+  "seattle":[47.6,-122.3],"seoul":[37.6,127.0],"shanghai":[31.2,121.5],
+  "singapore":[1.3,103.8],"sofia":[42.7,23.3],"stockholm":[59.3,18.1],
+  "sydney":[-33.9,151.2],"taipei":[25.1,121.6],"tehran":[35.7,51.4],
+  "tel aviv":[32.1,34.8],"tokyo":[35.7,139.7],"toronto":[43.7,-79.4],
+  "tunis":[36.8,10.2],"vancouver":[49.3,-123.1],"venice":[45.4,12.3],
+  "vienna":[48.2,16.4],"warsaw":[52.2,21.0],"washington":[38.9,-77.0],
+  "washington dc":[38.9,-77.0],"dc":[38.9,-77.0],"zurich":[47.4,8.5],
+  // US States
+  "alabama":[32.8,-86.8],"alaska":[64,-153],"arizona":[34.3,-111.1],
+  "arkansas":[34.8,-92.2],"california":[36.8,-119.4],"colorado":[39,-105.5],
+  "connecticut":[41.6,-72.7],"florida":[27.8,-81.6],"georgia":[32.2,-83.4],
+  "hawaii":[20.2,-156.7],"idaho":[44.1,-114.5],"illinois":[40,-89.2],
+  "indiana":[39.9,-86.3],"iowa":[42,-93.5],"kansas":[38.5,-98.4],
+  "kentucky":[37.5,-85.3],"louisiana":[31,-92],"maine":[45.3,-69.3],
+  "maryland":[39,-76.8],"massachusetts":[42.3,-71.8],"michigan":[44.3,-85.4],
+  "minnesota":[46.4,-93.1],"mississippi":[32.7,-89.7],"missouri":[38.4,-92.5],
+  "montana":[47,-110],"nebraska":[41.5,-99.9],"nevada":[39.3,-116.6],
+  "new hampshire":[43.7,-71.6],"new jersey":[40,-74.5],"new mexico":[34.4,-106.1],
+  "north carolina":[35.6,-79.8],"north dakota":[47.5,-100.5],"ohio":[40.4,-82.8],
+  "oklahoma":[35.6,-96.9],"oregon":[44,-120.5],"pennsylvania":[40.6,-77.2],
+  "rhode island":[41.7,-71.6],"south carolina":[33.9,-81],"south dakota":[44,-100],
+  "tennessee":[35.7,-86.7],"texas":[31,-100],"utah":[39.4,-111.1],
+  "vermont":[44,-72.7],"virginia":[37.8,-79],"west virginia":[38.9,-80.5],
+  "wisconsin":[44.3,-89.8],"wyoming":[43,-107.5],
+  // Regions
+  "africa":[0,25],"asia":[35,100],"europe":[50,10],
+  "north america":[45,-100],"south america":[-15,-60],
+  "middle east":[30,45],"southeast asia":[10,110],"caribbean":[18,-73],
+  "mediterranean":[36,14],"scandinavia":[62,14]
+};
+
+function geoLookup(place) { return GEO[place.toLowerCase().trim()] || null; }
+
+function latLonToXY(lat, lon, W, H) {
+  return [(lon+180)/360*W, (90-lat)/180*H];
+}
+
+function renderMapViz() {
+  $('viz-title').textContent = '🗺 Map';
+  const memories = loadMemories();
+  const placeCounts = {}, unmapped = new Set();
+
+  memories.forEach(m => {
+    fieldArr(m.where).forEach(tag => {
+      const geo = geoLookup(tag);
+      if (!geo) { unmapped.add(tag); return; }
+      const key = tag.toLowerCase().trim();
+      if (!placeCounts[key]) placeCounts[key] = {lat:geo[0],lon:geo[1],count:0,label:tag,memories:[]};
+      placeCounts[key].count++;
+      placeCounts[key].memories.push(m);
+    });
+  });
+
+  const places = Object.values(placeCounts);
+  const W=800, H=420;
+  const maxCount = places.length ? Math.max(...places.map(p=>p.count)) : 1;
+
+  // ── SVG World Background ────────────────────────────
+  // Simplified equirectangular land polygons (hand-crafted approximation)
+  const land = [
+    // North America
+    "M128,52 L115,58 L100,72 L83,90 L72,108 L68,132 L70,155 L80,170 L95,188 L108,205 L118,218 L130,225 L145,222 L160,210 L170,192 L174,172 L170,152 L162,132 L155,115 L150,96 L150,78 L148,62 L140,55 Z",
+    // Central America + Caribbean
+    "M148,218 L140,225 L135,232 L140,238 L148,235 L155,228 Z",
+    "M170,198 L165,205 L170,212 L178,210 L180,202 Z",
+    // South America
+    "M160,232 L150,242 L145,258 L145,278 L148,300 L152,320 L155,342 L160,360 L168,372 L178,374 L185,365 L188,348 L186,328 L183,305 L178,280 L173,258 L168,242 Z",
+    // Europe
+    "M352,58 L342,62 L336,72 L338,84 L345,92 L354,96 L365,94 L374,88 L378,78 L374,68 L365,62 Z",
+    "M340,68 L328,72 L322,80 L325,88 L334,90 L342,86 Z",
+    "M370,58 L380,52 L390,52 L396,60 L392,70 L382,72 L372,68 Z",
+    // Scandinavia
+    "M365,42 L358,38 L352,44 L350,54 L358,58 L366,56 Z",
+    "M372,38 L368,32 L362,34 L360,42 L366,44 L374,42 Z",
+    "M378,38 L374,30 L382,28 L386,36 L382,40 Z",
+    // Africa
+    "M355,118 L345,128 L338,145 L335,168 L336,192 L340,215 L346,238 L354,256 L364,268 L376,272 L388,268 L396,254 L400,232 L400,208 L396,184 L392,160 L390,138 L386,122 L378,116 Z",
+    // Middle East / Arabian Peninsula
+    "M395,118 L390,125 L388,138 L392,152 L400,158 L410,156 L418,148 L418,135 L412,124 Z",
+    "M400,158 L395,165 L392,178 L396,185 L404,185 L412,178 L415,165 L408,158 Z",
+    // Asia (large landmass)
+    "M395,52 L405,48 L420,46 L440,46 L462,44 L485,44 L506,46 L525,48 L542,50 L558,52 L570,56 L580,64 L585,75 L585,90 L580,105 L572,118 L560,128 L548,133 L538,140 L526,148 L515,155 L502,158 L492,155 L482,148 L472,148 L462,153 L452,158 L442,155 L434,148 L424,145 L415,138 L408,128 L402,116 L398,102 L395,88 L392,75 L394,62 Z",
+    // South Asia (India)
+    "M480,148 L472,155 L465,165 L462,178 L464,192 L468,205 L475,215 L484,218 L492,212 L498,200 L500,185 L498,170 L494,158 Z",
+    // Southeast Asia
+    "M520,155 L514,162 L510,172 L514,180 L520,184 L528,182 L534,174 L532,164 Z",
+    "M534,165 L530,175 L532,185 L538,190 L545,186 L548,175 L544,165 Z",
+    // Japan
+    "M570,95 L565,100 L566,108 L572,112 L578,108 L579,100 Z",
+    "M572,108 L567,114 L568,122 L574,126 L580,122 L580,114 Z",
+    // Australia
+    "M556,248 L545,255 L538,268 L536,285 L540,302 L547,316 L558,326 L572,330 L586,328 L598,318 L606,304 L608,288 L604,272 L595,258 L582,250 Z",
+    // New Zealand
+    "M615,305 L610,312 L612,320 L618,322 L623,316 L621,308 Z",
+    "M617,318 L612,325 L614,334 L620,336 L625,330 L623,320 Z",
+    // Greenland
+    "M215,28 L205,24 L195,26 L188,34 L188,44 L195,52 L205,55 L215,52 L222,44 L222,34 Z",
+    // Iceland
+    "M320,42 L314,45 L312,52 L316,58 L324,60 L330,56 L330,48 Z",
+  ];
+
+  let svgContent = `
+    <rect width="${W}" height="${H}" fill="#ddeef5"/>
+    <g stroke="#c0dae8" stroke-width="0.5" fill="none">
+      ${[...Array(12)].map((_,i)=>`<line x1="${(i/12*W).toFixed(0)}" y1="0" x2="${(i/12*W).toFixed(0)}" y2="${H}"/>`).join('')}
+      ${[...Array(7)].map((_,i)=>`<line x1="0" y1="${(i/6*H).toFixed(0)}" x2="${W}" y2="${(i/6*H).toFixed(0)}"/>`).join('')}
+    </g>
+    <line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#9fc8da" stroke-width="0.8" stroke-dasharray="6,4" opacity="0.7"/>
+    <line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" stroke="#9fc8da" stroke-width="0.8" stroke-dasharray="6,4" opacity="0.7"/>
+    <g fill="#cde3c0" stroke="#afc8a0" stroke-width="0.7">${land.map(d=>`<path d="${d}"/>`).join('')}</g>
+  `;
+
+  // Draw bubbles
+  const minR=6, maxR=34;
+  places.forEach(p => {
+    const [x,y] = latLonToXY(p.lat, p.lon, W, H);
+    const r = maxCount===1 ? (minR+maxR)/2 : minR+((p.count-1)/(maxCount-1))*(maxR-minR);
+    const safeLabel = esc(p.label).replace(/\\/g,'\\\\');
+    svgContent += `<circle class="map-bubble"
+      cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}"
+      data-label="${esc(p.label)}" data-count="${p.count}"
+      data-ids="${p.memories.map(m=>m.id).join(',')}"
+      onmouseenter="showMapTip(event,this)"
+      onmouseleave="hideMapTip()"
+    />`;
+    if (r >= 12) {
+      svgContent += `<text x="${x.toFixed(1)}" y="${(y+r+11).toFixed(1)}"
+        text-anchor="middle" font-family="DM Sans,sans-serif" font-size="9.5"
+        fill="#2a2218" opacity="0.85" pointer-events="none">${esc(p.label)}</text>`;
+    }
+  });
+
+  const noData = places.length===0
+    ? `<div class="map-no-data">No mappable <em>Where</em> tags yet.<br><span style="font-size:.8rem;">Try tagging memories with city or country names like "Paris" or "Japan".</span></div>` : '';
+
+  const unmappedHtml = unmapped.size
+    ? `<div style="margin-top:16px;">
+        <div class="section-label">Unmapped Where tags</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+          ${[...unmapped].map(t=>`<span class="chip-tag">${esc(t)}</span>`).join('')}
+        </div>
+        <p style="font-size:.75rem;color:var(--muted);margin-top:6px;">These weren't recognised as geographic locations and were left off the map.</p>
+      </div>` : '';
+
+  $('viz-body').innerHTML = `
+    <div id="map-container">
+      ${noData}
+      ${places.length ? `<svg id="map-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>` : ''}
+    </div>
+    ${unmappedHtml}
+    <p style="font-size:.72rem;color:var(--muted);margin-top:10px;">Bubble size reflects number of memories at that location. Hover to see details.</p>
+  `;
+}
+
+// Map tooltip
+function showMapTip(e, el) {
+  const tip=$('map-tooltip');
+  const label=el.dataset.label, count=el.dataset.count;
+  const ids=el.dataset.ids.split(',').filter(Boolean);
+  const mems=loadMemories().filter(m=>ids.includes(m.id));
+  tip.innerHTML=`<strong>${esc(label)}</strong><br>${count} memor${count==1?'y':'ies'}<br>`
+    +mems.slice(0,3).map(m=>`<span style="opacity:.8">· ${esc((m.title||m.what).slice(0,32))}</span>`).join('<br>')
+    +(mems.length>3?`<br><span style="opacity:.6">…and ${mems.length-3} more</span>`:'');
+  tip.style.left=(e.clientX+14)+'px';
+  tip.style.top= (e.clientY-60)+'px';
+  tip.style.display='block';
+}
+function hideMapTip() { $('map-tooltip').style.display='none'; }
+document.addEventListener('mousemove', ()=>{});  // ensure mouse events propagate
+
+/* ═══════════════════════════════════════════════════════
+   TIMELINE VISUALIZATION
+   Priority: 4-digit year → month → day → text tags.
+   Unrecognised tags go to "Undated".
+══════════════════════════════════════════════════════ */
+function renderTimelineViz() {
+  $('viz-title').textContent = '📅 Timeline';
+  const memories = loadMemories();
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function parseWhen(tag) {
+    const t = tag.trim();
+    if (/^(1[0-9]{3}|2[0-9]{3})$/.test(t)) return {year:+t,month:null,day:null,display:t};
+    // ISO date
+    const iso=t.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return {year:+iso[1],month:+iso[2]-1,day:+iso[3],display:t};
+    const usDate=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (usDate) return {year:+usDate[3],month:+usDate[1]-1,day:+usDate[2],display:t};
+    // Month + year  "June 2019", "2019 June", "Jun 2019"
+    const ymA=t.match(/(\d{4})[^a-zA-Z0-9]*([A-Za-z]+)/);
+    const ymB=t.match(/([A-Za-z]+)[^a-zA-Z0-9]*(\d{4})/);
+    const ym=ymA||ymB;
+    if (ym) {
+      const yearStr=ym[1].length===4?ym[1]:ym[2], monStr=ym[1].length===4?ym[2]:ym[1];
+      const mi=MONTHS.findIndex(m=>monStr.toLowerCase().startsWith(m.toLowerCase()));
+      if (mi!==-1) return {year:+yearStr,month:mi,day:null,display:t};
+      return {year:+yearStr,month:null,day:null,display:t};
+    }
+    // Year embedded in phrase: "Summer 2018", "circa 1995"
+    const emb=t.match(/\b(1[0-9]{3}|2[0-9]{3})\b/);
+    if (emb) return {year:+emb[1],month:null,day:null,display:t};
+    return null;
+  }
+
+  // Build structure: yearGroups[year][monKey] = [{tag, m}]
+  const yearGroups={}, undated=[];
+  const memSet=new Set(); // avoid double-placing a memory for same year if it has 2 when-tags
+
+  memories.forEach(m => {
+    const tags=fieldArr(m.when);
+    if (!tags.length) { if(!memSet.has(m.id)){memSet.add(m.id);undated.push(m);} return; }
+    let placed=false;
+    tags.forEach(tag => {
+      const p=parseWhen(tag);
+      if (!p) { if(!placed&&!memSet.has(m.id)){memSet.add(m.id);undated.push(m);} return; }
+      placed=true;
+      if (!yearGroups[p.year]) yearGroups[p.year]={};
+      const mk=p.month!==null?p.month:'__';
+      if (!yearGroups[p.year][mk]) yearGroups[p.year][mk]=[];
+      yearGroups[p.year][mk].push({tag:p.display,m});
+    });
+  });
+
+  if (!memories.length) { $('viz-body').innerHTML='<div class="empty-state">Your jar is empty.</div>'; return; }
+
+  const years=Object.keys(yearGroups).map(Number).sort((a,b)=>b-a);
+  let html='<div class="timeline-wrap"><div class="timeline-line"></div>';
+
+  years.forEach(year=>{
+    html+=`<div class="tl-year-group"><div class="tl-year-label">${year}</div>`;
+    const monKeys=Object.keys(yearGroups[year]).sort((a,b)=>{
+      if(a==='__'&&b==='__') return 0;
+      if(a==='__') return 1;
+      if(b==='__') return -1;
+      return +a-+b;
+    });
+    monKeys.forEach(mk=>{
+      const monLabel=mk==='__'?'':MONTHS[+mk];
+      html+=`<div class="tl-month-group">`;
+      if(monLabel) html+=`<div class="tl-month-label">${monLabel}</div>`;
+      yearGroups[year][mk].forEach(({tag,m},idx)=>{
+        const detailId=`tl-detail-${year}-${mk}-${idx}`;
+        html+=`<div class="tl-memory-pill" onclick="toggleTlDetail('${detailId}')">
+          <div class="tl-pill-what">${esc(m.title||m.what)}</div>
+          <span class="tl-pill-tag">${esc(tag)}</span>
+        </div>
+        <div class="tl-detail-wrap" id="${detailId}">
+          ${m.title?`<div class="memory-field" style="font-size:.82rem;margin-bottom:4px;"><strong>${esc(m.title)}</strong></div>`:''}
+          <div class="memory-field"><strong>What:</strong> ${esc(m.what)}</div>
+          ${fieldArr(m.who).length?`<div class="memory-field"><strong>Who:</strong> ${chipsHTML(fieldArr(m.who))}</div>`:''}
+          ${fieldArr(m.where).length?`<div class="memory-field"><strong>Where:</strong> ${chipsHTML(fieldArr(m.where))}</div>`:''}
+          ${m.why?`<div class="memory-field"><strong>Why:</strong> ${esc(m.why)}</div>`:''}
+          <div style="margin-top:8px;"><button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id}')">🗑 Delete</button></div>
+        </div>`;
+      });
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  });
+
+  if (undated.length) {
+    html+=`<div class="tl-undated"><div class="tl-undated-label">Undated memories</div>`;
+    undated.forEach((m,idx)=>{
+      const detailId=`tl-detail-undated-${idx}`;
+      html+=`<div class="tl-memory-pill" onclick="toggleTlDetail('${detailId}')">
+        <div class="tl-pill-what">${esc(m.title||m.what)}</div>
+      </div>
+      <div class="tl-detail-wrap" id="${detailId}">
+        <div class="memory-field"><strong>What:</strong> ${esc(m.what)}</div>
+        ${fieldArr(m.who).length?`<div class="memory-field"><strong>Who:</strong> ${chipsHTML(fieldArr(m.who))}</div>`:''}
+        ${fieldArr(m.where).length?`<div class="memory-field"><strong>Where:</strong> ${chipsHTML(fieldArr(m.where))}</div>`:''}
+        ${m.why?`<div class="memory-field"><strong>Why:</strong> ${esc(m.why)}</div>`:''}
+        <div style="margin-top:8px;"><button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id}')">🗑 Delete</button></div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  html+='</div>';
+  $('viz-body').innerHTML=html;
+}
+
+function toggleTlDetail(id) {
+  const el=$(id); if(el) el.classList.toggle('open');
+}
+
+/* ═══ FULL RENDER ════════════════════════════════════ */
+function renderAll() {
+  const memories=loadMemories();
+  renderPrompt();
+  showRandom(memories);
+  renderList();
+  buildTagCloud();
+}
+
+/* ═══ MODAL HELPERS ══════════════════════════════════ */
+function closeModal(id) {
+  // Persist lightweight settings on close
+  if (id === 'settings-modal') {
+    const s = loadSettings();
+    s.reflectivePrompts = !!$('s-reflective').checked;
+    saveSettings(s);
+    renderPrompt();
+  }
+  $(id).classList.add('hidden');
+}
+function handleBackdropClick(e,id) { if(e.target===$(id)) closeModal(id); }
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    ['add-modal','settings-modal'].forEach(id=>closeModal(id));
+    $('viz-menu').classList.add('hidden');
+  }
+});
+
+/* ═══ BOOT ═══════════════════════════════════════════ */
+init();
+</script>
+
+<script>
+/* ═══ PWA INSTALL / OFFLINE SUPPORT ═══════════════════ */
+let deferredInstallPrompt = null;
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(err => {
+      console.log('Service worker registration failed:', err);
+    });
+  });
+}
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  const card = document.getElementById('pwa-install-card');
+  if (card) card.classList.add('show');
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const card = document.getElementById('pwa-install-card');
+  if (card) card.classList.remove('show');
+});
+document.addEventListener('click', async (event) => {
+  if (event.target && event.target.id === 'pwa-install-btn' && deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    const card = document.getElementById('pwa-install-card');
+    if (card) card.classList.remove('show');
+  }
+});
+</script>
+</body>
+</html>
